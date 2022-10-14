@@ -14,6 +14,8 @@ const days = require("./routes/days");
 const appointments = require("./routes/appointments");
 const interviewers = require("./routes/interviewers");
 
+const gameRoutes = require("./routes/games");
+
 function read(file) {
   return new Promise((resolve, reject) => {
     fs.readFile(
@@ -31,7 +33,8 @@ function read(file) {
 
 module.exports = function application(
   ENV,
-  actions = { updateAppointment: () => {} }
+  actions = { updateAppointment: () => {} },
+  games
 ) {
   app.use(cors());
   app.use(helmet());
@@ -40,6 +43,7 @@ module.exports = function application(
   app.use("/api", days(db));
   app.use("/api", appointments(db, actions.updateAppointment));
   app.use("/api", interviewers(db));
+  app.use("/api", gameRoutes(games))
 
   if (ENV === "development" || ENV === "test") {
     Promise.all([
