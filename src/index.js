@@ -3,36 +3,55 @@ const ENV = require("./environment");
 
 class Games {
   constructor() {
-    this.games = {};
+    this.games = [];
     this.createGame = this.createGame.bind(this);
     this.joinGame = this.joinGame.bind(this);
     this.findGame = this.findGame.bind(this);
   }
 
-  createGame(client) {
+  createGame(nickname, client) {
+    // generate a random 3 digit ID for the game
     const gameId = Math.floor(Math.random() * 900 + 100);
 
-    this.games[gameId] = {
+    // this.games[gameId] = {
+    //   id: gameId,
+    //   host: client
+    // };
+
+    // games are stored in an array
+    this.games.push({
       id: gameId,
-      host: client
-    };
+      host: nickname,
+      hostSocket: client,
+      guest: null,
+      guestSocket: null
+    });
+    // this.games.push(gameId);
 
     return gameId;
   }
 
-  joinGame(client, gameId) {
-    const game = this.games[gameId];
-    console.log("game", game);
+  joinGame(nickname, gameId, client) {
+    const gameIdNumber = Number(gameId);
+    // const game = this.games[gameId];
+    const game = this.findGame(gameIdNumber);
+    console.log("game to join:", game);
     if (game) {
-      game.guest = client;
+      game.guest = nickname;
+      game.guestSocket = client;
 
-      return true;
+      return game;
     }
     return false;
   }
 
-  findGame(id) {
-    return this.games[id];
+  findGame(gameId) {
+    console.log("looking for:", gameId, " in games:", this.games);
+    // return this.games[id];
+    console.log("found game:", this.games.find(game => game.id === gameId));
+    // this.games.forEach(game => console.log("game id:", game.id));
+    console.log("compairing:", gameId, "to", this.games[0].id);
+    return this.games.find(game => game.id === gameId);
   }
 }
 
@@ -69,7 +88,7 @@ wss.on("connection", socket => {
 
       if (message.type === "CREATE_GAME") {
         console.log("Creating game",);
-        const gameId = games.createGame(socket);
+        const gameId = games.createGame(message.nickname, socket);
         socket.send(
           JSON.stringify({
             type: "CREATE_GAME",
@@ -79,25 +98,26 @@ wss.on("connection", socket => {
       }
 
       if (message.type === "JOIN_GAME") {
-        const success = games.joinGame(socket, message.gameId);
+        const game = games.joinGame(message.nickname, message.gameId, socket);
         socket.send(
           JSON.stringify({
             type: "JOIN_GAME",
-            success
+            success: !!game
           })
         );
-        if (success) {
-          const game = games.findGame(message.gameId);
-          game.host.send(
+        if (game) {
+          // const game = games.findGame(message.gameId);
+          game.hostSocket.send(
             JSON.stringify({
               type: "GAME_READY",
-              gameId: message.gameId
+              gameId: game.id
             })
           );
-          game.guest.send(
+          game.guestSocket.send(
             JSON.stringify({
               type: "GAME_READY",
-              gameId: message.gameId
+              gameId: game.id,
+              // game
             })
           );
         }
@@ -105,14 +125,14 @@ wss.on("connection", socket => {
 
       if (message.type === "SEND_MOVE") {
         const game = games.findGame(message.gameId);
-        const players = [game.host, game.guest];
+        const players = [game.hostSocket, game.guestSocket];
         console.log('sending move to players: ', players);
         players.forEach(player => {
           player.send(
             JSON.stringify({
               type: "MOVE",
               move: message.move,
-              gameId: message.gameId
+              gameId: message.gameId // make this game.id
             })
           );
         });
