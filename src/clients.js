@@ -1,3 +1,4 @@
+// not used because I couldn't figure out how to import a class from another file
 class Clients {
   constructor() {
     this.clientList = {};

@@ -13,11 +13,6 @@ class Games {
     // generate a random 3 digit ID for the game
     const gameId = Math.floor(Math.random() * 900 + 100);
 
-    // this.games[gameId] = {
-    //   id: gameId,
-    //   host: client
-    // };
-
     // games are stored in an array
     this.games.push({
       id: gameId,
@@ -26,32 +21,40 @@ class Games {
       guest: null,
       guestSocket: null
     });
-    // this.games.push(gameId);
 
     return gameId;
   }
 
   joinGame(nickname, gameId, client) {
+    // convert gameId to a number since it arrives as a string
     const gameIdNumber = Number(gameId);
-    // const game = this.games[gameId];
+
+    // find the game in the array
     const game = this.findGame(gameIdNumber);
-    console.log("game to join:", game);
+
+    // if the game exists, add the guest to the game
     if (game) {
       game.guest = nickname;
       game.guestSocket = client;
 
       return game;
     }
+
+    // if the game doesn't exist, return false
     return false;
   }
 
   findGame(gameId) {
-    console.log("looking for:", gameId, " in games:", this.games);
-    // return this.games[id];
-    console.log("found game:", this.games.find(game => game.id === gameId));
-    // this.games.forEach(game => console.log("game id:", game.id));
-    console.log("compairing:", gameId, "to", this.games[0].id);
     return this.games.find(game => game.id === gameId);
+  }
+
+  findGameBySocket(client) {
+    return this.games.find(game => game.hostSocket === client || game.guestSocket === client);
+  }
+
+  removeGame(gameId) {
+    const gameIndex = this.games.findIndex(game => game.id === gameId);
+    this.games.splice(gameIndex, 1);
   }
 }
 
@@ -64,23 +67,22 @@ const WebSocket = require("ws");
 const wss = new WebSocket.Server({ server });
 
 // const Clients = require("./clients");
-class Clients {
-  constructor() {
-    this.clientList = {};
-    this.saveClient = this.saveClient.bind(this);
-  }
-  saveClient(name, client) {
-    this.clientList[name] = client;
-  }
-}
+// class Clients {
+//   constructor() {
+//     this.clientList = {};
+//     this.saveClient = this.saveClient.bind(this);
+//   }
+//   saveClient(name, client) {
+//     this.clientList[name] = client;
+//   }
+// }
 
-const clients = new Clients();
+// const clients = new Clients();
 
 wss.on("connection", socket => {
   socket.onmessage = event => {
     console.log(`Message Received: ${event.data}`);
-    // socket.send(`Message Received: ${event.data}`);
-    clients.saveClient(event.data.username, socket);
+    // clients.saveClient(event.data.username, socket);
 
     try {
       const message = JSON.parse(event.data);
@@ -89,6 +91,7 @@ wss.on("connection", socket => {
       if (message.type === "CREATE_GAME") {
         console.log("Creating game",);
         const gameId = games.createGame(message.nickname, socket);
+        console.log("gameId:", gameId);
         socket.send(
           JSON.stringify({
             type: "CREATE_GAME",
@@ -106,7 +109,6 @@ wss.on("connection", socket => {
           })
         );
         if (game) {
-          // const game = games.findGame(message.gameId);
           game.hostSocket.send(
             JSON.stringify({
               type: "GAME_READY",
@@ -117,7 +119,6 @@ wss.on("connection", socket => {
             JSON.stringify({
               type: "GAME_READY",
               gameId: game.id,
-              // game
             })
           );
         }
@@ -142,7 +143,6 @@ wss.on("connection", socket => {
     } catch (e) {
       console.log(e); 
     }
-    
 
     if (event.data === "ping") {
       socket.send(JSON.stringify("pong"));
@@ -151,6 +151,21 @@ wss.on("connection", socket => {
     if (event.data === "{\"type\":\"ping\"}") {
       socket.send(JSON.stringify("pong object"));
     }
+  };
+
+  socket.onclose = event => {
+    console.log("socket closed", event);
+
+    // remove the client from the list
+    // clients.removeClient(socket);
+
+    // if the client was in a game, remove the game
+    const game = games.findGameBySocket(socket);
+    if (game) {
+      games.removeGame(game);
+    }
+
+
   };
 });
 
